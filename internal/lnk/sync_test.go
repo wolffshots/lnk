@@ -725,3 +725,25 @@ func (suite *CoreTestSuite) TestForwardSlashIndexEntry() {
 		})
 	}
 }
+
+// TestRestoreSymlinksKeepsFileWhenSymlinkFails checks that a failed restore
+// puts the pre-existing file back instead of leaving only the .lnk-backup copy.
+func (suite *CoreTestSuite) TestRestoreSymlinksKeepsFileWhenSymlinkFails() {
+	// A relative repo path makes CreateSymlink fail: no relative symlink
+	// target exists between an absolute link and a relative stored file.
+	suite.T().Setenv("LNK_HOME", "relrepo")
+	suite.Require().NoError(os.Mkdir("relrepo", 0755))
+	suite.Require().NoError(os.WriteFile(filepath.Join("relrepo", ".bashrc"), []byte("stored"), 0644))
+	suite.Require().NoError(os.WriteFile(filepath.Join("relrepo", ".lnk"), []byte(".bashrc\n"), 0644))
+
+	homeFile := filepath.Join(suite.tempDir, ".bashrc")
+	suite.Require().NoError(os.WriteFile(homeFile, []byte("mine"), 0644))
+
+	_, err := NewLnk().RestoreSymlinks()
+	suite.Require().Error(err)
+
+	content, err := os.ReadFile(homeFile)
+	suite.Require().NoError(err)
+	suite.Equal("mine", string(content))
+	suite.NoFileExists(homeFile + ".lnk-backup")
+}

@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"syscall"
 
 	"github.com/yarlson/lnk/internal/lnkerror"
 )
@@ -22,7 +23,20 @@ var (
 	ErrDirCreate       = errors.New("Failed to create directory. Please check permissions and available disk space.")
 	ErrRelativePath    = errors.New("Unable to create symlink due to path configuration issues. Please check file locations.")
 	ErrOutsideHome     = errors.New("Cannot manage a file outside the home directory on Windows")
+	ErrCrossDevice     = errors.New("The lnk repository and the file are on different drives or file systems")
+	ErrFileInUse       = errors.New("Cannot move the file because Windows denied access")
+	ErrSymlinkDenied   = errors.New("Windows did not allow lnk to create a symlink")
 )
+
+// Windows API error codes. The syscall package names them on Windows only.
+const (
+	winErrAccessDenied     = syscall.Errno(5)
+	winErrNotSameDevice    = syscall.Errno(17)
+	winErrSharingViolation = syscall.Errno(32)
+	winErrPrivilegeNotHeld = syscall.Errno(1314)
+)
+
+const sameDriveSuggestion = "keep the lnk repository on the same drive as your files, set LNK_HOME to change its location"
 
 // FileSystem handles file system operations
 type FileSystem struct{}
@@ -105,7 +119,7 @@ func (fs *FileSystem) MoveFile(src, dst string) error {
 	}
 
 	// Move the file
-	return os.Rename(src, dst)
+	return rename(src, dst)
 }
 
 // CreateSymlink creates a relative symlink from target to linkPath
@@ -113,11 +127,15 @@ func (fs *FileSystem) CreateSymlink(target, linkPath string) error {
 	// Calculate relative path from linkPath to target
 	relTarget, err := filepath.Rel(filepath.Dir(linkPath), target)
 	if err != nil {
+		// On Windows, a relative symlink cannot cross volumes.
+		if runtime.GOOS == "windows" && !strings.EqualFold(filepath.VolumeName(linkPath), filepath.VolumeName(target)) {
+			return lnkerror.WithPathAndSuggestion(ErrCrossDevice, linkPath, sameDriveSuggestion)
+		}
 		return lnkerror.Wrap(ErrRelativePath)
 	}
 
 	// Create the symlink
-	return os.Symlink(relTarget, linkPath)
+	return mapSymlinkError(os.Symlink(relTarget, linkPath))
 }
 
 // MoveDirectory moves a directory from source to destination recursively
@@ -128,7 +146,42 @@ func (fs *FileSystem) MoveDirectory(src, dst string) error {
 	}
 
 	// Move the directory
-	return os.Rename(src, dst)
+	return rename(src, dst)
+}
+
+// rename moves src to dst and maps the failures a user can fix to sentinel errors.
+func rename(src, dst string) error {
+	return mapRenameError(os.Rename(src, dst), src)
+}
+
+func mapRenameError(err error, src string) error {
+	if err == nil {
+		return nil
+	}
+
+	if runtime.GOOS == "windows" {
+		if errors.Is(err, winErrNotSameDevice) {
+			return lnkerror.WithPathAndSuggestion(ErrCrossDevice, src, sameDriveSuggestion)
+		}
+		// Windows refuses to move a directory while a program has a file inside it open.
+		if errors.Is(err, winErrAccessDenied) || errors.Is(err, winErrSharingViolation) {
+			return lnkerror.WithPathAndSuggestion(ErrFileInUse, src, "close any program that has the file, or a file inside the directory, open and try again")
+		}
+		return err
+	}
+
+	if errors.Is(err, syscall.EXDEV) {
+		return lnkerror.WithPathAndSuggestion(ErrCrossDevice, src, sameDriveSuggestion)
+	}
+
+	return err
+}
+
+func mapSymlinkError(err error) error {
+	if runtime.GOOS == "windows" && errors.Is(err, winErrPrivilegeNotHeld) {
+		return lnkerror.WithSuggestion(ErrSymlinkDenied, "turn on Developer Mode in Windows Settings, or run lnk as administrator")
+	}
+	return err
 }
 
 // GetRelativePath converts an absolute path to a relative path from the home directory.
