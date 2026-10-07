@@ -3,6 +3,7 @@ package lnk
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -155,7 +156,7 @@ func (suite *CoreTestSuite) TestGetRelativePath() {
 			path:    "/etc/config",
 			homeDir: "/home/user",
 			want:    "etc/config",
-			wantErr: false,
+			wantErr: runtime.GOOS == "windows", // Windows rejects paths outside home
 		},
 		{
 			name:    "path with trailing slash",

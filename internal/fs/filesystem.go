@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/yarlson/lnk/internal/lnkerror"
@@ -20,6 +21,7 @@ var (
 	ErrSymlinkRead     = errors.New("Unable to read symlink. The file may be corrupted or have invalid permissions.")
 	ErrDirCreate       = errors.New("Failed to create directory. Please check permissions and available disk space.")
 	ErrRelativePath    = errors.New("Unable to create symlink due to path configuration issues. Please check file locations.")
+	ErrOutsideHome     = errors.New("Cannot manage a file outside the home directory on Windows")
 )
 
 // FileSystem handles file system operations
@@ -130,6 +132,7 @@ func (fs *FileSystem) MoveDirectory(src, dst string) error {
 }
 
 // GetRelativePath converts an absolute path to a relative path from the home directory.
+// The result uses forward slashes on every platform, so a .lnk file is portable.
 func GetRelativePath(absPath string) (string, error) {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
@@ -138,12 +141,19 @@ func GetRelativePath(absPath string) (string, error) {
 
 	relPath, err := filepath.Rel(homeDir, absPath)
 	if err != nil {
+		// On Windows, Rel fails for an absolute path on a different volume.
+		if runtime.GOOS == "windows" && filepath.IsAbs(absPath) {
+			return "", lnkerror.WithPath(ErrOutsideHome, absPath)
+		}
 		return "", fmt.Errorf("failed to get relative path: %w", err)
 	}
 
 	if strings.HasPrefix(relPath, "..") {
+		if runtime.GOOS == "windows" {
+			return "", lnkerror.WithPath(ErrOutsideHome, absPath)
+		}
 		return strings.TrimPrefix(absPath, "/"), nil
 	}
 
-	return relPath, nil
+	return filepath.ToSlash(relPath), nil
 }
