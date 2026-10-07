@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/suite"
 
 	"github.com/yarlson/lnk/internal/fs"
+	"github.com/yarlson/lnk/internal/testenv"
 )
 
 type CoreTestSuite struct {
@@ -33,7 +34,7 @@ func (suite *CoreTestSuite) SetupTest() {
 	suite.Require().NoError(err)
 
 	// Set HOME to temp directory for consistent relative path calculation
-	suite.T().Setenv("HOME", tempDir)
+	testenv.SetHome(suite.T(), tempDir)
 
 	// Clear LNK_HOME so it doesn't override test paths
 	suite.T().Setenv("LNK_HOME", "")
@@ -81,7 +82,7 @@ func (suite *CoreTestSuite) TestXDGConfigHomeFallback() {
 	homeDir := filepath.Join(suite.tempDir, "home")
 	err := os.MkdirAll(homeDir, 0755)
 	suite.Require().NoError(err)
-	suite.T().Setenv("HOME", homeDir)
+	testenv.SetHome(suite.T(), homeDir)
 
 	lnk := NewLnk()
 	err = lnk.Init()
@@ -191,7 +192,7 @@ func (suite *CoreTestSuite) TestGetRelativePath() {
 	for _, tt := range tests {
 		suite.Run(tt.name, func() {
 			// Set HOME env for the test
-			suite.T().Setenv("HOME", tt.homeDir)
+			testenv.SetHome(suite.T(), tt.homeDir)
 
 			// Call GetRelativePath (now in filemanager package)
 			got, err := fs.GetRelativePath(tt.path)
@@ -238,7 +239,7 @@ func (suite *CoreTestSuite) TestGetRepoPath() {
 			setupEnv: func() {
 				suite.T().Setenv("LNK_HOME", "")
 				suite.T().Setenv("XDG_CONFIG_HOME", "")
-				suite.T().Setenv("HOME", suite.tempDir)
+				testenv.SetHome(suite.T(), suite.tempDir)
 			},
 			wantSuffix: "/.config/lnk",
 		},

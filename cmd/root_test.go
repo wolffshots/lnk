@@ -15,6 +15,7 @@ import (
 
 	"github.com/yarlson/lnk/internal/lnk"
 	error2 "github.com/yarlson/lnk/internal/lnkerror"
+	"github.com/yarlson/lnk/internal/testenv"
 )
 
 type CLITestSuite struct {
@@ -39,7 +40,7 @@ func (suite *CLITestSuite) SetupTest() {
 	suite.Require().NoError(err)
 
 	// Set HOME to temp directory for consistent relative path calculation
-	suite.T().Setenv("HOME", tempDir)
+	testenv.SetHome(suite.T(), tempDir)
 
 	// Clear LNK_HOME so it doesn't override test paths
 	suite.T().Setenv("LNK_HOME", "")
@@ -1776,7 +1777,7 @@ func (suite *CLITestSuite) TestPushPullWithDifferentBranches() {
 			suite.Require().NoError(err)
 
 			// Set HOME to test directory
-			suite.T().Setenv("HOME", testDir)
+			testenv.SetHome(suite.T(), testDir)
 			suite.T().Setenv("XDG_CONFIG_HOME", testDir)
 
 			// Create remote repository
@@ -1821,7 +1822,7 @@ func (suite *CLITestSuite) TestPushPullWithDifferentBranches() {
 			suite.Require().NoError(err)
 
 			// Set HOME for pull test
-			suite.T().Setenv("HOME", pullTestDir)
+			testenv.SetHome(suite.T(), pullTestDir)
 			suite.T().Setenv("XDG_CONFIG_HOME", pullTestDir)
 
 			// Clone and test pull
