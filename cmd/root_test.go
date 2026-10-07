@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -786,6 +787,13 @@ touch bootstrap-ran.txt
 
 	// Test bootstrap command with script
 	err = suite.runCommand("bootstrap")
+	markerFile := filepath.Join(lnkDir, "bootstrap-ran.txt")
+	if runtime.GOOS == "windows" {
+		// lnk does not run bootstrap scripts on Windows
+		suite.ErrorIs(err, error2.ErrBootstrapWindows)
+		suite.NoFileExists(markerFile)
+		return
+	}
 	suite.NoError(err)
 	output = suite.stdout.String()
 	suite.Contains(output, "Running bootstrap script")
@@ -793,7 +801,6 @@ touch bootstrap-ran.txt
 	suite.Contains(output, "Bootstrap completed successfully")
 
 	// Verify script actually ran
-	markerFile := filepath.Join(lnkDir, "bootstrap-ran.txt")
 	suite.FileExists(markerFile)
 }
 
@@ -801,6 +808,10 @@ touch bootstrap-ran.txt
 // silences not only the framing output but also stdout/stderr from the
 // bootstrap script itself, while still actually executing it.
 func (suite *CLITestSuite) TestBootstrapCommand_QuietSuppressesScriptOutput() {
+	if runtime.GOOS == "windows" {
+		suite.T().Skip("lnk does not run bootstrap scripts on Windows")
+	}
+
 	err := suite.runCommand("init")
 	suite.Require().NoError(err)
 	suite.stdout.Reset()
@@ -887,14 +898,21 @@ touch remote-bootstrap-ran.txt
 	output := suite.stdout.String()
 	suite.Contains(output, "Cloned from:")
 	suite.Contains(output, "Looking for bootstrap script")
+	lnkDir := filepath.Join(suite.tempDir, ".config", "lnk")
+	markerFile := filepath.Join(lnkDir, "remote-bootstrap-ran.txt")
+	if runtime.GOOS == "windows" {
+		// lnk does not run bootstrap scripts on Windows
+		suite.Contains(output, "Skipped bootstrap.sh")
+		suite.NotContains(output, "Running bootstrap script")
+		suite.NoFileExists(markerFile)
+		return
+	}
 	suite.Contains(output, "Found bootstrap script:")
 	suite.Contains(output, "bootstrap.sh")
 	suite.Contains(output, "Running bootstrap script")
 	suite.Contains(output, "Bootstrap completed successfully")
 
 	// Verify bootstrap actually ran
-	lnkDir := filepath.Join(suite.tempDir, ".config", "lnk")
-	markerFile := filepath.Join(lnkDir, "remote-bootstrap-ran.txt")
 	suite.FileExists(markerFile)
 }
 
@@ -3020,4 +3038,30 @@ func (suite *CLITestSuite) TestDoctorCommand_ReportsBackup() {
 
 func TestCLISuite(t *testing.T) {
 	suite.Run(t, new(CLITestSuite))
+}
+
+// TestAddCommand_WindowsExpandsWildcards checks that add expands a wildcard
+// itself, because PowerShell and cmd.exe pass it to the program unchanged.
+func (suite *CLITestSuite) TestAddCommand_WindowsExpandsWildcards() {
+	if runtime.GOOS != "windows" {
+		suite.T().Skip("a Unix shell expands wildcards before lnk starts")
+	}
+
+	err := suite.runCommand("init")
+	suite.Require().NoError(err)
+	suite.stdout.Reset()
+
+	skillsDir := filepath.Join(suite.tempDir, ".agents", "skills")
+	for _, name := range []string{"skill-a", "skill-b"} {
+		suite.Require().NoError(os.MkdirAll(filepath.Join(skillsDir, name), 0755))
+		suite.Require().NoError(os.WriteFile(filepath.Join(skillsDir, name, "SKILL.md"), []byte(name), 0644))
+	}
+
+	err = suite.runCommand("add", "--host", "work", filepath.Join(skillsDir, "*"))
+	suite.Require().NoError(err)
+	suite.Contains(suite.stdout.String(), "Added 2 items to lnk (host: work)")
+
+	index, err := os.ReadFile(filepath.Join(suite.tempDir, ".config", "lnk", ".lnk.work"))
+	suite.Require().NoError(err)
+	suite.Equal(".agents/skills/skill-a\n.agents/skills/skill-b\n", string(index))
 }
