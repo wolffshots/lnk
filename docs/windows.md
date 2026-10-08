@@ -92,6 +92,8 @@ When `lnk add` fails, it moves no file. When a restore fails, an existing file s
 
 If the console shows broken characters in place of emoji, pass `--no-emoji`.
 
+The old Windows console (`conhost.exe`) prints color codes as text, for example `[1m` and `[36m`. Pass `--colors never` or set the `NO_COLOR` environment variable there. Windows Terminal shows the colors.
+
 ## WSL
 
 A WSL distribution has its own home directory and its own `lnk` repo. Use the tool that matches the home directory:
