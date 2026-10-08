@@ -62,7 +62,11 @@ Put the Windows files under a host name, and pass `--host` to `add`, `rm`, `list
 | Wildcards | `lnk add` expands `*` and `?`. |
 | File name case | Windows ignores case and the index file does not. Keep one spelling for each path. |
 
-Paths longer than 260 characters are not tested.
+A path longer than 260 characters needs `core.longpaths` in the repo. Without it, `lnk add` on such a file fails with a Git error and moves nothing.
+
+```powershell
+git -C $HOME\.config\lnk config core.longpaths true
+```
 
 ## Line endings
 
