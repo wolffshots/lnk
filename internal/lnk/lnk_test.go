@@ -233,7 +233,7 @@ func (suite *CoreTestSuite) TestGetRepoPath() {
 				suite.T().Setenv("LNK_HOME", "")
 				suite.T().Setenv("XDG_CONFIG_HOME", "/custom/config")
 			},
-			wantSuffix: "/custom/config/lnk",
+			wantSuffix: filepath.FromSlash("/custom/config/lnk"),
 		},
 		{
 			name: "without XDG_CONFIG_HOME defaults to HOME/.config",
@@ -242,7 +242,7 @@ func (suite *CoreTestSuite) TestGetRepoPath() {
 				suite.T().Setenv("XDG_CONFIG_HOME", "")
 				testenv.SetHome(suite.T(), suite.tempDir)
 			},
-			wantSuffix: "/.config/lnk",
+			wantSuffix: filepath.FromSlash("/.config/lnk"),
 		},
 	}
 

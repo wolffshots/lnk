@@ -2283,10 +2283,10 @@ func (suite *CLITestSuite) TestAddCommand_AbsolutePath_PrintsCorrectDestination(
 	suite.NoError(err)
 	output := suite.stdout.String()
 
-	suite.Contains(output, "~/.config/lnk/.bashrc")
+	suite.Contains(output, filepath.FromSlash("~/.config/lnk/.bashrc"))
 	// Bug regression: must not contain the absolute path glued to the repo path.
-	suite.NotContains(output, "~/.config/lnk"+testFile)
-	suite.NotContains(output, "~/.config/lnk//")
+	suite.NotContains(output, filepath.FromSlash("~/.config/lnk")+testFile)
+	suite.NotContains(output, filepath.FromSlash("~/.config/lnk//"))
 }
 
 // TestAddCommand_LnkHome_PrintsCorrectDestination verifies that when LNK_HOME
@@ -2310,7 +2310,7 @@ func (suite *CLITestSuite) TestAddCommand_LnkHome_PrintsCorrectDestination() {
 
 	expected := lnk.DisplayPath(filepath.Join(customRepo, ".bashrc"))
 	suite.Contains(output, expected)
-	suite.NotContains(output, "~/.config/lnk")
+	suite.NotContains(output, filepath.FromSlash("~/.config/lnk"))
 }
 
 // TestAddCommand_NestedPath_PrintsFullRelativePath verifies that nested files
@@ -2331,7 +2331,7 @@ func (suite *CLITestSuite) TestAddCommand_NestedPath_PrintsFullRelativePath() {
 	suite.NoError(err)
 	output := suite.stdout.String()
 
-	suite.Contains(output, "~/.config/lnk/.config/nvim/init.lua")
+	suite.Contains(output, filepath.FromSlash("~/.config/lnk/.config/nvim/init.lua"))
 }
 
 // TestAddCommand_HostNestedPath_PrintsHostStoragePath verifies that host-scoped
@@ -2352,7 +2352,7 @@ func (suite *CLITestSuite) TestAddCommand_HostNestedPath_PrintsHostStoragePath()
 	suite.NoError(err)
 	output := suite.stdout.String()
 
-	suite.Contains(output, "~/.config/lnk/work.lnk/.config/nvim/init.lua")
+	suite.Contains(output, filepath.FromSlash("~/.config/lnk/work.lnk/.config/nvim/init.lua"))
 }
 
 // TestAddCommand_RecursiveNestedPath_PrintsFullRelativePath verifies that recursive add
@@ -2374,7 +2374,7 @@ func (suite *CLITestSuite) TestAddCommand_RecursiveNestedPath_PrintsFullRelative
 	suite.NoError(err)
 	output := suite.stdout.String()
 
-	suite.Contains(output, "~/.config/lnk/.docs/README.md")
+	suite.Contains(output, filepath.FromSlash("~/.config/lnk/.docs/README.md"))
 }
 
 // TestRemoveCommand_NestedPath_PrintsCanonicalSourcePath verifies that `lnk rm`
@@ -2399,7 +2399,7 @@ func (suite *CLITestSuite) TestRemoveCommand_NestedPath_PrintsCanonicalSourcePat
 	suite.NoError(err)
 	output := suite.stdout.String()
 
-	suite.Contains(output, "~/.config/lnk/.config/nvim/init.lua")
+	suite.Contains(output, filepath.FromSlash("~/.config/lnk/.config/nvim/init.lua"))
 }
 
 // TestRemoveCommand_HostNestedPath_PrintsHostStoragePath verifies that a
@@ -2424,7 +2424,7 @@ func (suite *CLITestSuite) TestRemoveCommand_HostNestedPath_PrintsHostStoragePat
 	suite.NoError(err)
 	output := suite.stdout.String()
 
-	suite.Contains(output, "~/.config/lnk/work.lnk/.config/nvim/init.lua")
+	suite.Contains(output, filepath.FromSlash("~/.config/lnk/work.lnk/.config/nvim/init.lua"))
 }
 
 // TestStatusCommand_DirtyWithLnkHome_PrintsRepoPath verifies the dirty-status
@@ -2459,7 +2459,7 @@ func (suite *CLITestSuite) TestStatusCommand_DirtyWithLnkHome_PrintsRepoPath() {
 	expectedRepo := lnk.DisplayPath(customRepo)
 	suite.Contains(output, "Repository has uncommitted changes")
 	suite.Contains(output, expectedRepo)
-	suite.NotContains(output, "~/.config/lnk")
+	suite.NotContains(output, filepath.FromSlash("~/.config/lnk"))
 }
 
 // TestDryRun_SameBasenameDifferentDirs verifies that dry-run output uses
@@ -2485,8 +2485,8 @@ func (suite *CLITestSuite) TestDryRun_SameBasenameDifferentDirs() {
 	output := suite.stdout.String()
 
 	suite.Contains(output, "Would add", "Should show dry-run preview")
-	suite.Contains(output, "~/a/config.json", "Should show first file with parent directory")
-	suite.Contains(output, "~/b/config.json", "Should show second file with parent directory")
+	suite.Contains(output, filepath.FromSlash("~/a/config.json"), "Should show first file with parent directory")
+	suite.Contains(output, filepath.FromSlash("~/b/config.json"), "Should show second file with parent directory")
 }
 
 // TestMultiAdd_SameBasenameDifferentDirs verifies that the success listing
@@ -2510,10 +2510,10 @@ func (suite *CLITestSuite) TestMultiAdd_SameBasenameDifferentDirs() {
 	suite.NoError(err)
 	output := suite.stdout.String()
 
-	suite.Contains(output, "~/a/config.json", "Should show first source path")
-	suite.Contains(output, "~/b/config.json", "Should show second source path")
-	suite.Contains(output, "~/.config/lnk/a/config.json", "Should show first storage path")
-	suite.Contains(output, "~/.config/lnk/b/config.json", "Should show second storage path")
+	suite.Contains(output, filepath.FromSlash("~/a/config.json"), "Should show first source path")
+	suite.Contains(output, filepath.FromSlash("~/b/config.json"), "Should show second source path")
+	suite.Contains(output, filepath.FromSlash("~/.config/lnk/a/config.json"), "Should show first storage path")
+	suite.Contains(output, filepath.FromSlash("~/.config/lnk/b/config.json"), "Should show second storage path")
 }
 
 // TestRecursiveAdd_NonTTYNoCarriageReturn verifies that piped/non-TTY contexts
@@ -2591,8 +2591,8 @@ func (suite *CLITestSuite) TestRecursiveAdd_SameBasenameMultipleDirs() {
 	suite.Contains(output, "Added 2 files recursively", "Should show count of both files")
 
 	// Same-basename files are distinguishable by their directory path in the source
-	suite.Contains(output, "app-a/config.json", "Should show first config with parent dir")
-	suite.Contains(output, "app-b/config.json", "Should show second config with parent dir")
+	suite.Contains(output, filepath.FromSlash("app-a/config.json"), "Should show first config with parent dir")
+	suite.Contains(output, filepath.FromSlash("app-b/config.json"), "Should show second config with parent dir")
 
 	// Verify files are actually managed (symlinks created)
 	infoA, err := os.Lstat(configFileA)
