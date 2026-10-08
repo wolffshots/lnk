@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 
 	"github.com/yarlson/lnk/internal/git"
 	"github.com/yarlson/lnk/internal/lnkerror"
@@ -45,6 +46,12 @@ func (r *Runner) RunScript(scriptName string, stdout, stderr io.Writer, stdin io
 
 	if _, err := os.Stat(scriptPath); os.IsNotExist(err) {
 		return lnkerror.WithPath(lnkerror.ErrBootstrapNotFound, scriptName)
+	}
+
+	// On Windows, "bash" can resolve to the WSL launcher, which runs the
+	// script in a different environment.
+	if runtime.GOOS == "windows" {
+		return lnkerror.WithPathAndSuggestion(lnkerror.ErrBootstrapWindows, scriptName, "run the script yourself from Git Bash or WSL")
 	}
 
 	if err := os.Chmod(scriptPath, 0755); err != nil {

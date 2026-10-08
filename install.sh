@@ -28,7 +28,11 @@ detect_platform() {
     case "$(uname -s)" in
         Linux)   os="Linux" ;;
         Darwin)  os="Darwin" ;;
-        MINGW*|MSYS*|CYGWIN*) os="Windows" ;;
+        MINGW*|MSYS*|CYGWIN*)
+            echo -e "${RED}Error: this installer does not support Windows${NC}" >&2
+            echo -e "${YELLOW}See docs/windows.md in the repository for the Windows install steps.${NC}" >&2
+            exit 1
+            ;;
         *)
             echo -e "${RED}Error: Unsupported operating system $(uname -s)${NC}"
             exit 1

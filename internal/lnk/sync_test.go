@@ -2,6 +2,7 @@ package lnk
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 )
@@ -661,4 +662,88 @@ func (suite *CoreTestSuite) TestPull() {
 			}
 		})
 	}
+}
+
+// TestForwardSlashIndexEntry checks that an index file with forward slashes,
+// as every platform writes it, restores, passes doctor and removes.
+func (suite *CoreTestSuite) TestForwardSlashIndexEntry() {
+	tests := []struct {
+		name        string
+		host        string
+		indexFile   string
+		storageRoot string
+	}{
+		{name: "common", host: "", indexFile: ".lnk", storageRoot: ""},
+		{name: "host", host: "work", indexFile: ".lnk.work", storageRoot: "work.lnk"},
+	}
+
+	const entry = ".config/app/config.json"
+
+	for _, tt := range tests {
+		suite.Run(tt.name, func() {
+			l := NewLnk(WithHost(tt.host))
+			suite.Require().NoError(l.Init())
+
+			// Create the stored file and the index directly (simulating a pull)
+			repoDir := filepath.Join(suite.tempDir, "lnk")
+			stored := filepath.Join(repoDir, tt.storageRoot, filepath.FromSlash(entry))
+			suite.Require().NoError(os.MkdirAll(filepath.Dir(stored), 0755))
+			suite.Require().NoError(os.WriteFile(stored, []byte("{}"), 0644))
+			suite.Require().NoError(os.WriteFile(filepath.Join(repoDir, tt.indexFile), []byte(entry+"\n"), 0644))
+
+			cmd := exec.Command("git", "add", ".")
+			cmd.Dir = repoDir
+			suite.Require().NoError(cmd.Run())
+			cmd = exec.Command("git", "-c", "user.email=test@test.com", "-c", "user.name=Test", "commit", "-m", "lnk: pulled")
+			cmd.Dir = repoDir
+			suite.Require().NoError(cmd.Run())
+
+			link := filepath.Join(suite.tempDir, filepath.FromSlash(entry))
+			defer func() { _ = os.RemoveAll(filepath.Join(suite.tempDir, ".config")) }()
+
+			restored, err := l.RestoreSymlinks()
+			suite.Require().NoError(err)
+			suite.Equal([]string{entry}, restored.Restored)
+
+			info, err := os.Lstat(link)
+			suite.Require().NoError(err)
+			suite.Equal(os.ModeSymlink, info.Mode()&os.ModeSymlink)
+
+			result, err := l.PreviewDoctor()
+			suite.Require().NoError(err)
+			suite.False(result.HasIssues())
+
+			suite.Require().NoError(l.Remove(link))
+
+			info, err = os.Lstat(link)
+			suite.Require().NoError(err)
+			suite.True(info.Mode().IsRegular())
+
+			items, err := l.List()
+			suite.Require().NoError(err)
+			suite.Empty(items)
+		})
+	}
+}
+
+// TestRestoreSymlinksKeepsFileWhenSymlinkFails checks that a failed restore
+// puts the pre-existing file back instead of leaving only the .lnk-backup copy.
+func (suite *CoreTestSuite) TestRestoreSymlinksKeepsFileWhenSymlinkFails() {
+	// A relative repo path makes CreateSymlink fail: no relative symlink
+	// target exists between an absolute link and a relative stored file.
+	suite.T().Setenv("LNK_HOME", "relrepo")
+	suite.Require().NoError(os.Mkdir("relrepo", 0755))
+	suite.Require().NoError(os.WriteFile(filepath.Join("relrepo", ".bashrc"), []byte("stored"), 0644))
+	suite.Require().NoError(os.WriteFile(filepath.Join("relrepo", ".lnk"), []byte(".bashrc\n"), 0644))
+
+	homeFile := filepath.Join(suite.tempDir, ".bashrc")
+	suite.Require().NoError(os.WriteFile(homeFile, []byte("mine"), 0644))
+
+	_, err := NewLnk().RestoreSymlinks()
+	suite.Require().Error(err)
+
+	content, err := os.ReadFile(homeFile)
+	suite.Require().NoError(err)
+	suite.Equal("mine", string(content))
+	suite.NoFileExists(homeFile + ".lnk-backup")
 }

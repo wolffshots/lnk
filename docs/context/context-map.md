@@ -8,6 +8,7 @@
 - [architecture](architecture.md) — package layering and collaborator responsibilities
 - [repo-layout](repo-layout.md) — on-disk shape, index format, host scoping
 - [platform](platform.md) — build, release, CI, distribution
+- [windows](../windows.md) — user guide for Windows: requirements, install, differences, errors
 
 ## Flows
 

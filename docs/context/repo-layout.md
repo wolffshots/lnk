@@ -23,6 +23,7 @@ The repo path itself doubles as the storage root for **common** items. There is 
 
 - Plain text, UTF-8, one path per line, newline-terminated.
 - Each entry is a path relative to the user's home directory (e.g. `.vimrc`, `.config/nvim/init.lua`). Paths outside `$HOME` are stored with the leading `/` stripped.
+- Entries use forward slashes on every platform, so one repo works on Windows, Linux and macOS. On Windows, a path outside the home directory is rejected with `ErrOutsideHome`.
 - The list is sorted on every write; duplicates are deduplicated on add. Empty lines are tolerated on read but not produced.
 - An empty index file (after removing the last entry) is written as zero bytes (no trailing newline).
 - The same relative path can appear in `.lnk` and in any number of `.lnk.<host>` files independently — common and host scopes are not merged.

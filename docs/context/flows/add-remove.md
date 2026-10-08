@@ -7,18 +7,22 @@ The `add` family is the most defensively-coded path in the codebase because it m
 `cmd/add.go` routes single-file `add` to `Lnk.Add` (no progress, no batching) so existing CLI output stays unchanged. Steps in `filemanager.Manager.Add`:
 
 1. `fs.ValidateFileForAdd` — must exist, must be a regular file or directory.
-2. Compute `absPath` (from CWD) and `relativePath` (home-relative; `/`-stripped for paths outside `$HOME`).
+2. Compute `absPath` (from CWD) and `relativePath` (home-relative with forward slashes; `/`-stripped for paths outside `$HOME`). On Windows, a path outside the home directory returns `ErrOutsideHome`.
 3. `os.MkdirAll(filepath.Dir(destPath))` where `destPath = HostStoragePath()/relativePath`.
 4. Check the index — if `relativePath` is already in `.lnk`/`.lnk.<host>`, return `ErrAlreadyManaged`.
 5. `os.Stat` the source to capture mode info for the move.
-6. `fs.Move(absPath, destPath, info)` — `os.Rename` (file or directory).
-7. `fs.CreateSymlink(destPath, absPath)` — relative symlink. On failure, move the file back and return.
+6. `fs.Move(absPath, destPath, info)` — `os.Rename` (file or directory). A rename across file systems or drives returns `ErrCrossDevice`. On Windows, a directory with an open file returns `ErrFileInUse`.
+7. `fs.CreateSymlink(destPath, absPath)` — relative symlink. On failure, move the file back and return. On Windows, a missing symlink privilege returns `ErrSymlinkDenied`.
 8. `tracker.AddManagedItem(relativePath)` — read, append, sort, write.
 9. `git.Add(<gitPath>)` where `gitPath = relativePath` for common or `<host>.lnk/<relativePath>` for host scope.
 10. `git.Add(<index file>)`.
 11. `git.Commit("lnk: added <basename>")`.
 
 Each Git/track step rolls back the prior steps (delete symlink, remove index entry, move file back) before returning.
+
+## Wildcards on Windows
+
+PowerShell and `cmd.exe` pass a wildcard to the program unchanged. On Windows, `cmd/add.go` calls `expandWildcards` before any other step. It expands `*` and `?` with `filepath.Glob`, treats `[` as a literal character, and keeps an argument that matches nothing. `lnk rm` takes one path and does not expand wildcards.
 
 ## Multi-file add (`lnk add <fileA> <fileB> ...`)
 

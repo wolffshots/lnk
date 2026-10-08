@@ -35,6 +35,7 @@ If there are no changes, push proceeds straight to `git push -u origin`. The CLI
    - If `~/<relativePath>` exists and is a regular file or directory, rename it to `<path>.lnk-backup` (preserve user data, append relative path to `BackedUp` list).
    - If it exists and is a stale symlink, `os.Remove` it.
    - `fs.CreateSymlink(repoItem, symlinkPath)` — relative symlink, append relative path to `Restored` list.
+   - If the symlink fails, rename the `.lnk-backup` file back to its path and return the error.
 
 The CLI separates outcomes: if `Restored` is non-empty, display the list of restored symlinks and any backup notice (files renamed to .lnk-backup), else display `All symlinks already in place`. When `--host` is set, the host name is included in messaging.
 

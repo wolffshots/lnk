@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 )
 
 // TestFindBootstrapScript tests bootstrap script detection
@@ -41,6 +42,12 @@ func (suite *CoreTestSuite) TestRunBootstrapScript() {
 
 	// Run the bootstrap script
 	err = suite.lnk.RunBootstrapScript("test.sh", os.Stdout, os.Stderr, os.Stdin)
+	if runtime.GOOS == "windows" {
+		// lnk does not run bootstrap scripts on Windows
+		suite.ErrorIs(err, ErrBootstrapWindows)
+		suite.NoFileExists(markerFile)
+		return
+	}
 	suite.NoError(err)
 
 	// Verify the marker file was created
@@ -49,6 +56,10 @@ func (suite *CoreTestSuite) TestRunBootstrapScript() {
 
 // TestRunBootstrapScriptWithError tests bootstrap script execution with error
 func (suite *CoreTestSuite) TestRunBootstrapScriptWithError() {
+	if runtime.GOOS == "windows" {
+		suite.T().Skip("lnk does not run bootstrap scripts on Windows")
+	}
+
 	err := suite.lnk.Init()
 	suite.Require().NoError(err)
 

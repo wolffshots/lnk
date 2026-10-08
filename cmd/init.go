@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"runtime"
 
 	"github.com/spf13/cobra"
 
@@ -67,7 +68,13 @@ func newInitCmd() *cobra.Command {
 						return err
 					}
 
-					if scriptPath != "" {
+					if scriptPath != "" && runtime.GOOS == "windows" {
+						w.WriteString("   ").
+							Writeln(Info("Skipped " + scriptPath + ": lnk does not run bootstrap scripts on Windows"))
+						if err := w.Err(); err != nil {
+							return err
+						}
+					} else if scriptPath != "" {
 						w.WriteString("   ").
 							Write(Success("Found bootstrap script: ")).
 							Writeln(Colored(scriptPath, ColorCyan)).

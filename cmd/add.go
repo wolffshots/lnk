@@ -3,6 +3,8 @@ package cmd
 import (
 	"fmt"
 	"path/filepath"
+	"runtime"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -36,6 +38,11 @@ changes to your system - perfect for verification before bulk operations.`,
 			dryRun, _ := cmd.Flags().GetBool("dry-run")
 			l := lnk.NewLnk(lnk.WithHost(host))
 			w := GetWriter(cmd)
+
+			// PowerShell and cmd.exe pass a wildcard to the program unchanged
+			if runtime.GOOS == "windows" {
+				args = expandWildcards(args)
+			}
 
 			// Handle dry-run mode
 			if dryRun {
@@ -184,6 +191,29 @@ changes to your system - perfect for verification before bulk operations.`,
 	cmd.Flags().BoolP("recursive", "r", false, "Add directory contents individually instead of the directory as a whole")
 	cmd.Flags().BoolP("dry-run", "n", false, "Show what would be added without making changes")
 	return cmd
+}
+
+// expandWildcards replaces each argument that holds * or ? with the paths it
+// matches, as a Unix shell does before it starts the program. An argument
+// that matches nothing stays as it is, so the caller reports it as not found.
+func expandWildcards(args []string) []string {
+	var expanded []string
+	for _, arg := range args {
+		if !strings.ContainsAny(arg, "*?") {
+			expanded = append(expanded, arg)
+			continue
+		}
+
+		// "[" is legal in a file name, so match it literally instead of as a class
+		pattern := strings.ReplaceAll(arg, "[", "[[]")
+		matches, err := filepath.Glob(pattern)
+		if err != nil || len(matches) == 0 {
+			expanded = append(expanded, arg)
+			continue
+		}
+		expanded = append(expanded, matches...)
+	}
+	return expanded
 }
 
 // displayLimit caps the number of per-file entries shown in batch summaries

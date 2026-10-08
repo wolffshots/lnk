@@ -182,10 +182,11 @@ func (s *Syncer) RestoreSymlinks() (*RestoreInfo, error) {
 			return nil, fmt.Errorf("failed to create directory %s: %w", symlinkDir, err)
 		}
 
+		var backupPath string
 		if existing, err := os.Lstat(symlinkPath); err == nil {
 			if existing.Mode()&os.ModeSymlink == 0 {
 				// Existing item is a regular file or directory — back it up
-				backupPath := symlinkPath + ".lnk-backup"
+				backupPath = symlinkPath + ".lnk-backup"
 				if err := os.Rename(symlinkPath, backupPath); err != nil {
 					return nil, fmt.Errorf("failed to back up existing item %s to %s: %w", symlinkPath, backupPath, err)
 				}
@@ -199,6 +200,10 @@ func (s *Syncer) RestoreSymlinks() (*RestoreInfo, error) {
 		}
 
 		if err := s.fs.CreateSymlink(repoItem, symlinkPath); err != nil {
+			// Put the user's file back so a failed restore leaves it in place
+			if backupPath != "" {
+				_ = os.Rename(backupPath, symlinkPath)
+			}
 			return nil, err
 		}
 

@@ -16,9 +16,10 @@ The CLI uses the empty-string return to mean "no bootstrap configured" rather th
 `bootstrapper.Runner.RunScript(scriptName, stdout, stderr, stdin)`:
 
 1. Stat `<repo>/<scriptName>` — `ErrBootstrapNotFound` if missing.
-2. `os.Chmod(scriptPath, 0755)` — `ErrBootstrapPerms` on failure.
-3. `exec.Command("bash", scriptPath)` with `cmd.Dir = repoPath` and the supplied stdio.
-4. Run; on non-zero exit, `ErrBootstrapFailed` with the underlying error string as a suggestion.
+2. On Windows, return `ErrBootstrapWindows` and start no process. `bash` can resolve to the WSL launcher there, which runs the script in a different environment.
+3. `os.Chmod(scriptPath, 0755)` — `ErrBootstrapPerms` on failure.
+4. `exec.Command("bash", scriptPath)` with `cmd.Dir = repoPath` and the supplied stdio.
+5. Run; on non-zero exit, `ErrBootstrapFailed` with the underlying error string as a suggestion.
 
 The script always runs through `bash`, regardless of the file's shebang or executable bit. Working directory is the repo path so the script can reference its sibling files with relative paths.
 
@@ -26,6 +27,7 @@ The script always runs through `bash`, regardless of the file's shebang or execu
 
 - `lnk init -r <url>` — runs automatically after a successful clone unless `--no-bootstrap`. A failure here is reported with a warning but does not roll back the clone; the user is told to retry with `lnk bootstrap`.
 - `lnk bootstrap` — runs the script on demand. Prints a "no bootstrap script found" message with a sample template if the file is absent.
+- On Windows, `lnk init -r` does not call `RunScript`. It prints one "Skipped bootstrap.sh" line and continues. `lnk bootstrap` returns `ErrBootstrapWindows`.
 
 ## I/O wiring
 

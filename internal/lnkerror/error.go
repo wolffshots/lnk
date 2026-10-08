@@ -13,6 +13,7 @@ var (
 	ErrBootstrapNotFound = errors.New("Bootstrap script not found")
 	ErrBootstrapFailed   = errors.New("Bootstrap script failed with error")
 	ErrBootstrapPerms    = errors.New("Failed to make bootstrap script executable")
+	ErrBootstrapWindows  = errors.New("lnk does not run bootstrap scripts on Windows")
 )
 
 // Error wraps a sentinel error with optional context for display.

@@ -29,6 +29,7 @@ var (
 	ErrBootstrapNotFound = lnkerror.ErrBootstrapNotFound
 	ErrBootstrapFailed   = lnkerror.ErrBootstrapFailed
 	ErrBootstrapPerms    = lnkerror.ErrBootstrapPerms
+	ErrBootstrapWindows  = lnkerror.ErrBootstrapWindows
 )
 
 // ProgressCallback defines the signature for progress reporting callbacks.

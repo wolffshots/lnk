@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/yarlson/lnk/internal/lnk"
 	error2 "github.com/yarlson/lnk/internal/lnkerror"
+	"github.com/yarlson/lnk/internal/testenv"
 )
 
 type CLITestSuite struct {
@@ -39,7 +41,7 @@ func (suite *CLITestSuite) SetupTest() {
 	suite.Require().NoError(err)
 
 	// Set HOME to temp directory for consistent relative path calculation
-	suite.T().Setenv("HOME", tempDir)
+	testenv.SetHome(suite.T(), tempDir)
 
 	// Clear LNK_HOME so it doesn't override test paths
 	suite.T().Setenv("LNK_HOME", "")
@@ -785,6 +787,13 @@ touch bootstrap-ran.txt
 
 	// Test bootstrap command with script
 	err = suite.runCommand("bootstrap")
+	markerFile := filepath.Join(lnkDir, "bootstrap-ran.txt")
+	if runtime.GOOS == "windows" {
+		// lnk does not run bootstrap scripts on Windows
+		suite.ErrorIs(err, error2.ErrBootstrapWindows)
+		suite.NoFileExists(markerFile)
+		return
+	}
 	suite.NoError(err)
 	output = suite.stdout.String()
 	suite.Contains(output, "Running bootstrap script")
@@ -792,7 +801,6 @@ touch bootstrap-ran.txt
 	suite.Contains(output, "Bootstrap completed successfully")
 
 	// Verify script actually ran
-	markerFile := filepath.Join(lnkDir, "bootstrap-ran.txt")
 	suite.FileExists(markerFile)
 }
 
@@ -800,6 +808,10 @@ touch bootstrap-ran.txt
 // silences not only the framing output but also stdout/stderr from the
 // bootstrap script itself, while still actually executing it.
 func (suite *CLITestSuite) TestBootstrapCommand_QuietSuppressesScriptOutput() {
+	if runtime.GOOS == "windows" {
+		suite.T().Skip("lnk does not run bootstrap scripts on Windows")
+	}
+
 	err := suite.runCommand("init")
 	suite.Require().NoError(err)
 	suite.stdout.Reset()
@@ -886,14 +898,21 @@ touch remote-bootstrap-ran.txt
 	output := suite.stdout.String()
 	suite.Contains(output, "Cloned from:")
 	suite.Contains(output, "Looking for bootstrap script")
+	lnkDir := filepath.Join(suite.tempDir, ".config", "lnk")
+	markerFile := filepath.Join(lnkDir, "remote-bootstrap-ran.txt")
+	if runtime.GOOS == "windows" {
+		// lnk does not run bootstrap scripts on Windows
+		suite.Contains(output, "Skipped bootstrap.sh")
+		suite.NotContains(output, "Running bootstrap script")
+		suite.NoFileExists(markerFile)
+		return
+	}
 	suite.Contains(output, "Found bootstrap script:")
 	suite.Contains(output, "bootstrap.sh")
 	suite.Contains(output, "Running bootstrap script")
 	suite.Contains(output, "Bootstrap completed successfully")
 
 	// Verify bootstrap actually ran
-	lnkDir := filepath.Join(suite.tempDir, ".config", "lnk")
-	markerFile := filepath.Join(lnkDir, "remote-bootstrap-ran.txt")
 	suite.FileExists(markerFile)
 }
 
@@ -1776,7 +1795,7 @@ func (suite *CLITestSuite) TestPushPullWithDifferentBranches() {
 			suite.Require().NoError(err)
 
 			// Set HOME to test directory
-			suite.T().Setenv("HOME", testDir)
+			testenv.SetHome(suite.T(), testDir)
 			suite.T().Setenv("XDG_CONFIG_HOME", testDir)
 
 			// Create remote repository
@@ -1821,7 +1840,7 @@ func (suite *CLITestSuite) TestPushPullWithDifferentBranches() {
 			suite.Require().NoError(err)
 
 			// Set HOME for pull test
-			suite.T().Setenv("HOME", pullTestDir)
+			testenv.SetHome(suite.T(), pullTestDir)
 			suite.T().Setenv("XDG_CONFIG_HOME", pullTestDir)
 
 			// Clone and test pull
@@ -2264,10 +2283,10 @@ func (suite *CLITestSuite) TestAddCommand_AbsolutePath_PrintsCorrectDestination(
 	suite.NoError(err)
 	output := suite.stdout.String()
 
-	suite.Contains(output, "~/.config/lnk/.bashrc")
+	suite.Contains(output, filepath.FromSlash("~/.config/lnk/.bashrc"))
 	// Bug regression: must not contain the absolute path glued to the repo path.
-	suite.NotContains(output, "~/.config/lnk"+testFile)
-	suite.NotContains(output, "~/.config/lnk//")
+	suite.NotContains(output, filepath.FromSlash("~/.config/lnk")+testFile)
+	suite.NotContains(output, filepath.FromSlash("~/.config/lnk//"))
 }
 
 // TestAddCommand_LnkHome_PrintsCorrectDestination verifies that when LNK_HOME
@@ -2291,7 +2310,7 @@ func (suite *CLITestSuite) TestAddCommand_LnkHome_PrintsCorrectDestination() {
 
 	expected := lnk.DisplayPath(filepath.Join(customRepo, ".bashrc"))
 	suite.Contains(output, expected)
-	suite.NotContains(output, "~/.config/lnk")
+	suite.NotContains(output, filepath.FromSlash("~/.config/lnk"))
 }
 
 // TestAddCommand_NestedPath_PrintsFullRelativePath verifies that nested files
@@ -2312,7 +2331,7 @@ func (suite *CLITestSuite) TestAddCommand_NestedPath_PrintsFullRelativePath() {
 	suite.NoError(err)
 	output := suite.stdout.String()
 
-	suite.Contains(output, "~/.config/lnk/.config/nvim/init.lua")
+	suite.Contains(output, filepath.FromSlash("~/.config/lnk/.config/nvim/init.lua"))
 }
 
 // TestAddCommand_HostNestedPath_PrintsHostStoragePath verifies that host-scoped
@@ -2333,7 +2352,7 @@ func (suite *CLITestSuite) TestAddCommand_HostNestedPath_PrintsHostStoragePath()
 	suite.NoError(err)
 	output := suite.stdout.String()
 
-	suite.Contains(output, "~/.config/lnk/work.lnk/.config/nvim/init.lua")
+	suite.Contains(output, filepath.FromSlash("~/.config/lnk/work.lnk/.config/nvim/init.lua"))
 }
 
 // TestAddCommand_RecursiveNestedPath_PrintsFullRelativePath verifies that recursive add
@@ -2355,7 +2374,7 @@ func (suite *CLITestSuite) TestAddCommand_RecursiveNestedPath_PrintsFullRelative
 	suite.NoError(err)
 	output := suite.stdout.String()
 
-	suite.Contains(output, "~/.config/lnk/.docs/README.md")
+	suite.Contains(output, filepath.FromSlash("~/.config/lnk/.docs/README.md"))
 }
 
 // TestRemoveCommand_NestedPath_PrintsCanonicalSourcePath verifies that `lnk rm`
@@ -2380,7 +2399,7 @@ func (suite *CLITestSuite) TestRemoveCommand_NestedPath_PrintsCanonicalSourcePat
 	suite.NoError(err)
 	output := suite.stdout.String()
 
-	suite.Contains(output, "~/.config/lnk/.config/nvim/init.lua")
+	suite.Contains(output, filepath.FromSlash("~/.config/lnk/.config/nvim/init.lua"))
 }
 
 // TestRemoveCommand_HostNestedPath_PrintsHostStoragePath verifies that a
@@ -2405,7 +2424,7 @@ func (suite *CLITestSuite) TestRemoveCommand_HostNestedPath_PrintsHostStoragePat
 	suite.NoError(err)
 	output := suite.stdout.String()
 
-	suite.Contains(output, "~/.config/lnk/work.lnk/.config/nvim/init.lua")
+	suite.Contains(output, filepath.FromSlash("~/.config/lnk/work.lnk/.config/nvim/init.lua"))
 }
 
 // TestStatusCommand_DirtyWithLnkHome_PrintsRepoPath verifies the dirty-status
@@ -2440,7 +2459,7 @@ func (suite *CLITestSuite) TestStatusCommand_DirtyWithLnkHome_PrintsRepoPath() {
 	expectedRepo := lnk.DisplayPath(customRepo)
 	suite.Contains(output, "Repository has uncommitted changes")
 	suite.Contains(output, expectedRepo)
-	suite.NotContains(output, "~/.config/lnk")
+	suite.NotContains(output, filepath.FromSlash("~/.config/lnk"))
 }
 
 // TestDryRun_SameBasenameDifferentDirs verifies that dry-run output uses
@@ -2466,8 +2485,8 @@ func (suite *CLITestSuite) TestDryRun_SameBasenameDifferentDirs() {
 	output := suite.stdout.String()
 
 	suite.Contains(output, "Would add", "Should show dry-run preview")
-	suite.Contains(output, "~/a/config.json", "Should show first file with parent directory")
-	suite.Contains(output, "~/b/config.json", "Should show second file with parent directory")
+	suite.Contains(output, filepath.FromSlash("~/a/config.json"), "Should show first file with parent directory")
+	suite.Contains(output, filepath.FromSlash("~/b/config.json"), "Should show second file with parent directory")
 }
 
 // TestMultiAdd_SameBasenameDifferentDirs verifies that the success listing
@@ -2491,10 +2510,10 @@ func (suite *CLITestSuite) TestMultiAdd_SameBasenameDifferentDirs() {
 	suite.NoError(err)
 	output := suite.stdout.String()
 
-	suite.Contains(output, "~/a/config.json", "Should show first source path")
-	suite.Contains(output, "~/b/config.json", "Should show second source path")
-	suite.Contains(output, "~/.config/lnk/a/config.json", "Should show first storage path")
-	suite.Contains(output, "~/.config/lnk/b/config.json", "Should show second storage path")
+	suite.Contains(output, filepath.FromSlash("~/a/config.json"), "Should show first source path")
+	suite.Contains(output, filepath.FromSlash("~/b/config.json"), "Should show second source path")
+	suite.Contains(output, filepath.FromSlash("~/.config/lnk/a/config.json"), "Should show first storage path")
+	suite.Contains(output, filepath.FromSlash("~/.config/lnk/b/config.json"), "Should show second storage path")
 }
 
 // TestRecursiveAdd_NonTTYNoCarriageReturn verifies that piped/non-TTY contexts
@@ -2572,8 +2591,8 @@ func (suite *CLITestSuite) TestRecursiveAdd_SameBasenameMultipleDirs() {
 	suite.Contains(output, "Added 2 files recursively", "Should show count of both files")
 
 	// Same-basename files are distinguishable by their directory path in the source
-	suite.Contains(output, "app-a/config.json", "Should show first config with parent dir")
-	suite.Contains(output, "app-b/config.json", "Should show second config with parent dir")
+	suite.Contains(output, filepath.FromSlash("app-a/config.json"), "Should show first config with parent dir")
+	suite.Contains(output, filepath.FromSlash("app-b/config.json"), "Should show second config with parent dir")
 
 	// Verify files are actually managed (symlinks created)
 	infoA, err := os.Lstat(configFileA)
@@ -3019,4 +3038,30 @@ func (suite *CLITestSuite) TestDoctorCommand_ReportsBackup() {
 
 func TestCLISuite(t *testing.T) {
 	suite.Run(t, new(CLITestSuite))
+}
+
+// TestAddCommand_WindowsExpandsWildcards checks that add expands a wildcard
+// itself, because PowerShell and cmd.exe pass it to the program unchanged.
+func (suite *CLITestSuite) TestAddCommand_WindowsExpandsWildcards() {
+	if runtime.GOOS != "windows" {
+		suite.T().Skip("a Unix shell expands wildcards before lnk starts")
+	}
+
+	err := suite.runCommand("init")
+	suite.Require().NoError(err)
+	suite.stdout.Reset()
+
+	skillsDir := filepath.Join(suite.tempDir, ".agents", "skills")
+	for _, name := range []string{"skill-a", "skill-b"} {
+		suite.Require().NoError(os.MkdirAll(filepath.Join(skillsDir, name), 0755))
+		suite.Require().NoError(os.WriteFile(filepath.Join(skillsDir, name, "SKILL.md"), []byte(name), 0644))
+	}
+
+	err = suite.runCommand("add", "--host", "work", filepath.Join(skillsDir, "*"))
+	suite.Require().NoError(err)
+	suite.Contains(suite.stdout.String(), "Added 2 items to lnk (host: work)")
+
+	index, err := os.ReadFile(filepath.Join(suite.tempDir, ".config", "lnk", ".lnk.work"))
+	suite.Require().NoError(err)
+	suite.Equal(".agents/skills/skill-a\n.agents/skills/skill-b\n", string(index))
 }
