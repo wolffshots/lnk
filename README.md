@@ -30,6 +30,8 @@ Or grab a binary from [releases](https://github.com/yarlson/lnk/releases), or bu
 go install github.com/yarlson/lnk@latest
 ```
 
+On Windows, see [docs/windows.md](docs/windows.md).
+
 ## How it works
 
 ```

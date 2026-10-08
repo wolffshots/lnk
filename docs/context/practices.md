@@ -23,6 +23,7 @@ Conventions and invariants that are enforced by code or test, not aspirational s
 - **Storage paths** shown in CLI output use `lnk.FormatManagedPath(host, originalPath)` to ensure consistent formatting across commands. `FormatManagedPath` computes the canonical storage location (accounting for host scoping), then displays it home-relative (with `~`) or `/`-stripped for paths outside `$HOME`.
 - **Source paths** in preview and batch output use `displaySourcePath` to render home-relative paths (~/dir/file), allowing files with identical basenames in different directories to remain disambiguated. Falls back to the original input on path resolution failure.
 - When listing many files in batch output, only the first 5 entries are shown in detail, followed by "... and N more files" to keep output compact and readable.
+- CLI output uses the native path separator of the operating system. Index entries always use forward slashes, because `fs.GetRelativePath` returns `filepath.ToSlash`.
 
 ## Repo-path resolution
 
@@ -34,12 +35,14 @@ Conventions and invariants that are enforced by code or test, not aspirational s
 - `Add` and `AddMultiple` execute in three phases (validate → process → git commit). Any failure rolls back all completed steps in reverse order via `RollbackAll`.
 - The unit of atomicity is one git commit per CLI invocation. Multi-file `add` produces a single commit (`lnk: added N files` / `lnk: added N files recursively`), not one per file.
 - `Remove` (non-force) refuses to act unless the path is a symlink whose target is inside the repo path; this is a safety check in `fs.ValidateSymlinkForRemove`.
+- `fs.Move` maps a rename across file systems or drives to `ErrCrossDevice`. On Windows, it maps an access-denied rename to `ErrFileInUse`. A failed rename moves nothing.
 
 ## Symlink shape
 
 - Symlinks created by lnk are **relative** (`filepath.Rel` between link and target). This keeps the repo portable across home-directory locations.
 - `pull`/`doctor` validate symlinks by resolving the target and comparing absolute paths to the expected stored file.
-- On `pull`, if `~/<relative path>` exists as a real file or directory (not a symlink), it is renamed to `<path>.lnk-backup` rather than removed. Stale symlinks are removed.
+- On `pull`, if `~/<relative path>` exists as a real file or directory (not a symlink), it is renamed to `<path>.lnk-backup` rather than removed. Stale symlinks are removed. If the symlink then fails, the file is renamed back.
+- On Windows, `fs.CreateSymlink` maps the missing symlink privilege to `ErrSymlinkDenied`, and a target on a different volume to `ErrCrossDevice`.
 
 ## Git invocation
 
@@ -58,8 +61,12 @@ Conventions and invariants that are enforced by code or test, not aspirational s
 
 - Tests live next to the code they exercise. `cmd/root_test.go` and `internal/lnk/*_test.go` are the largest, exercising commands and the facade end-to-end against a real Git repo in a tempdir.
 - Tests use real git, real filesystem, and real symlinks — there is no mocking of `git` or `fs`.
+- Tests run on Linux and on Windows. On Windows they need the symlink privilege (Developer Mode or an elevated shell).
+- A test that needs a home directory calls `testenv.SetHome`, which sets `HOME` and `USERPROFILE`. Go reads `USERPROFILE` on Windows, so `HOME` alone sends the test to the real home directory.
+- A test that compares CLI output builds the expected path with `filepath.FromSlash`.
 
 ## CI gates
 
 - `gofmt -l` must be empty, `go vet ./...` clean, `golangci-lint` clean, `go test -race ./...` passing, and `goreleaser build --snapshot --clean` succeeding before merge.
+- The `test` job runs on `ubuntu-latest` and `windows-latest`. The `gofmt` check and the Codecov upload run on Linux only.
 - Releases are tag-driven (`v*`) and run GoReleaser end-to-end with the Homebrew tap token.

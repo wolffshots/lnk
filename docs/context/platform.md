@@ -9,20 +9,21 @@
 
 ## Install paths
 
-- One-shot install script: `install.sh` (also published via `curl | bash` from the GitHub raw URL).
+- One-shot install script: `install.sh` (also published via `curl | bash` from the GitHub raw URL). It stops with a message on Windows.
+- Windows: build from source. `docs/windows.md` has the requirements and the steps.
 - Homebrew formula published to a tap by GoReleaser.
 - Pre-built binaries on GitHub Releases (one per OS/arch).
 - `go install github.com/yarlson/lnk@latest` for a from-source install.
 
 ## GoReleaser
 
-`.goreleaser.yml` drives release artifacts: cross-platform binaries with embedded version/buildtime, archives, checksums, and the Homebrew tap update. Snapshot builds are exercised in CI.
+`.goreleaser.yml` drives release artifacts: cross-platform binaries with embedded version/buildtime, archives, checksums, and the Homebrew tap update. Snapshot builds are exercised in CI. The Windows archive is a `zip`. The other archives are `tar.gz`.
 
 ## GitHub Actions
 
 Three workflows under `.github/workflows/`:
 
-- **ci.yml** — runs on push to `main` and on PRs. Three jobs: `test` (gofmt strict + `go vet` + `go test -race -coverprofile` + Codecov upload), `lint` (golangci-lint), and `build` (depends on `test` and `lint`; runs `go build ./...` and `goreleaser build --snapshot --clean`).
+- **ci.yml** — runs on push to `main` and on PRs. Three jobs: `test` (gofmt strict + `go vet` + `go test -race -coverprofile` + Codecov upload), `lint` (golangci-lint), and `build` (depends on `test` and `lint`; runs `go build ./...` and `goreleaser build --snapshot --clean`). The `test` job runs on `ubuntu-latest` and `windows-latest`, with `bash` as the shell on each runner. The gofmt step and the Codecov upload run on Linux only.
 - **release.yml** — runs on tag push (`v*`). Runs `go test ./...` then `goreleaser release --clean` with `HOMEBREW_TAP_TOKEN` so the Homebrew tap repo can be updated.
 - **validate.yml** — runs on PRs that touch `.goreleaser.yml`, `main.go`, `cmd/**`, `internal/**`, or Go module files. Runs `goreleaser check` and a snapshot build to fail fast on release-config regressions.
 
